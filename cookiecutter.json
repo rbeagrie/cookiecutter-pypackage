@@ -1,11 +1,14 @@
 {
-	"repo_name": "mapping_something_with_tophat",
-	"tophat_binary": "/data/pombo/software/tophat_recent/tophat",
-	"num_processes": "6",
-	"mate_inner_dist": "-40",
-	"mate_std_dev": "50",
-	"library_type": "fr-firststrand",
-	"gtf_file": "/data/pombo/iGenomes/Mus_musculus/UCSC/mm9/Annotation/Genes/genes.gtf",
-	"bowtie_index": "/data/pombo/iGenomes/Mus_musculus/UCSC/mm9/Sequence/Bowtie2Index/genome",
-	"read_ext": ".fastq.gz"
+	"repo_name"       : "mapping_something_with_tophat",
+	"tophat_binary"   : "/data/pombo/software/tophat_recent/tophat",
+	"num_processes"   : "8",
+	"mate_inner_dist" : "-40",
+	"mate_std_dev"    : "50",
+	"library_type"    : "fr-firststrand",
+	"gtf_file"        : "/data/pombo/iGenomes/Mus_musculus/UCSC/mm9/Annotation/Genes/genes.gtf",
+	"bowtie_index"    : "/data/pombo/iGenomes/Mus_musculus/UCSC/mm9/Sequence/Bowtie2Index/genome",
+	"read_ext"        : ".fastq.gz",
+    "python_path"     : "python",
+    "genome_db"       : "mm9",
+    "stranded"        : "--stranded",
 }
