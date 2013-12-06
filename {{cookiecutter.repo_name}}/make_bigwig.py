@@ -64,6 +64,8 @@ def get_doit_tasks(input_bamfile):
 
         tasks_to_run.append({
                     'name' : 'Making bedGraph for minus strand',
+                    'actions' : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s.temp',
+                                 'awk \'{print $1"\t"$2"\t"$3"\t-"$4}\' %(targets)s.temp > %(targets)s',
                     'actions' : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s'],
                     'targets' : [with_extension(".minus.bedgraph")],
                     'file_dep' : [with_extension(".minus.bam")],
