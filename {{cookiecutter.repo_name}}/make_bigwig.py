@@ -1,134 +1,155 @@
 #! /usr/bin/env python
 
-from doit.task import dict_to_task
-from doit.cmd_base import TaskLoader
-from doit.doit_cmd import DoitMain
+import sys
 import argparse
 import os
-import sys
+from doit.cmd_base import ModuleTaskLoader
+from doit.doit_cmd import DoitMain
+
 
 parser = argparse.ArgumentParser(description='Create BigWigs from RNA-seq data.')
-parser.add_argument('input_bamfile', metavar='INPUT_BAMFILE', help='Input bam file to create BigWigs from.')
+parser.add_argument('input_bamfiles', metavar='INPUT_BAMFILE', nargs='+', help='Input bam file to create BigWigs from.')
 parser.add_argument('-g','--genome_file', metavar='GENOME_FILE', help='File containing chromosome names and lengths')
 parser.add_argument('-s','--stranded',action='store_true',
                     help='Create two BigWigs, one for the plus and one for the minus strand (default: one file for both strands)')
 
-args = parser.parse_args()
+def with_extension(input_file, extension): 
+    output_dir = os.path.dirname(input_file)
+    basename = os.path.splitext(os.path.basename(input_file))[0]
+    return os.path.join(output_dir, basename + extension)
 
-def get_doit_tasks(input_bamfile):
-    """Take the path to one bamfile and return the doit tasks which would convert it to a BigWig"""
 
-    output_dir = os.path.dirname(input_bamfile)
-    basename = os.path.splitext(os.path.basename(input_bamfile))[0]
+def sort_bam():
+    """Sort a bamfile by genomic position"""
 
-    def with_extension(extension): return os.path.join(output_dir, basename + extension)
-
-    tasks_to_run = []
-
-    tasks_to_run.append({
-                'name' : 'Sorting input bam',
-                'actions' : ['samtools sort %(dependencies)s %(targets)s',
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Sorting input bam',
+            'name'     : input_bamfile,
+            'actions'  : ['samtools sort %(dependencies)s %(targets)s',
                           'mv %(targets)s.bam %(targets)s'],
-                'targets' : [with_extension(".sorted.bam")],
-                'file_dep' : [input_bamfile],
-    })
+            'targets'  : [with_extension(input_bamfile, ".sorted.bam")],
+            'file_dep' : [input_bamfile],
+              }
 
-    if args.stranded:
-        tasks_to_run.append({
-                    'name' : 'Extracting plus strand reads.',
-                    'actions' : ['bash -i -c "samtools merge %(targets)s <(samtools view -hb -f 128 -F 16 %(dependencies)s) <(samtools view -hb -f 80 %(dependencies)s)"'],
-                    'targets' : [with_extension(".plus.bam")],
-                    'file_dep' : [with_extension(".sorted.bam")],
-        })
+def get_plus_bamfile():
+    """Extract reads mapping to the positive strand of a bamfile"""
 
-        tasks_to_run.append({
-                    'name' : 'Extracting minus strand reads',
-                    'actions' : ['bash -i -c "samtools merge %(targets)s <(samtools view -hb -F 16 -f 64 %(dependencies)s) <(samtools view -hb -f 144 %(dependencies)s)"'],
-                    'targets' : [with_extension(".minus.bam")],
-                    'file_dep' : [with_extension(".sorted.bam")],
-        })
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Extracting plus strand reads.',
+            'name'     : input_bamfile,
+            'actions'  : ['bash -i -c "samtools merge %(targets)s <(samtools view -hb -f 128 -F 16 %(dependencies)s) <(samtools view -hb -f 80 %(dependencies)s)"'],
+            'targets'  : [with_extension(input_bamfile, ".plus.bam")],
+            'file_dep' : [with_extension(input_bamfile, ".sorted.bam")],
+        }
 
-        tasks_to_run.append({
-                    'name' : 'Making bedGraph for plus strand',
-                    'actions' : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s'],
-                    'targets' : [with_extension(".plus.bedgraph")],
-                    'file_dep' : [with_extension(".plus.bam")],
-        })
+def get_minus_bamfile():
+    """Extract reads mapping to the negative strand of a bamfile"""
 
-        tasks_to_run.append({
-                    'name' : 'Converting plus strand bedGraph to BigWig',
-                    'actions' : ['bedGraphToBigWig %(dependencies)s %(genome_file)s %(targets)s'],
-                    'targets' : [with_extension(".plus.bw")],
-                    'file_dep' : [with_extension(".plus.bedgraph")],
-        })
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Extracting minus strand reads',
+            'name'     : input_bamfile,
+            'actions'  : ['bash -i -c "samtools merge %(targets)s <(samtools view -hb -F 16 -f 64 %(dependencies)s) <(samtools view -hb -f 144 %(dependencies)s)"'],
+            'targets'  : [with_extension(input_bamfile, ".minus.bam")],
+            'file_dep' : [with_extension(input_bamfile, ".sorted.bam")],
+        }
 
-        tasks_to_run.append({
-                    'name' : 'Making bedGraph for minus strand',
-                    'actions' : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s.temp',
-                                 'awk \'{print $1"\t"$2"\t"$3"\t-"$4}\' %(targets)s.temp > %(targets)s',
-                                 'rm %(targets)s.temp'],
-                    'targets' : [with_extension(".minus.bedgraph")],
-                    'file_dep' : [with_extension(".minus.bam")],
-        })
+def get_plus_bedgraph():
+    """Convert positive strand bamfiles to bedgraphs"""
 
-        tasks_to_run.append({
-                    'name' : 'Converting minus strand bedGraph to BigWig',
-                    'actions' : ['bedGraphToBigWig %(dependencies)s %(genome_file)s %(targets)s'],
-                    'targets' : [with_extension(".minus.bw")],
-                    'file_dep' : [with_extension(".minus.bedgraph")],
-        })
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Making bedGraph for plus strand',
+            'name'     : input_bamfile,
+            'actions'  : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s'],
+            'targets'  : [with_extension(input_bamfile, ".plus.bedgraph")],
+            'file_dep' : [with_extension(input_bamfile, ".plus.bam")],
+        }
 
-    else:
-        tasks_to_run.append({
-                    'name' : 'Converting input bam file to bedGraph',
-                    'actions' : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s'],
-                    'targets' : [with_extension(".bedgraph")],
-                    'file_dep' : ['input_bamfile'],
-        })
+def get_plus_bigwig():
+    """Convert positive strand bedGraphs to BigWigs"""
 
-        tasks_to_run.append({
-                    'name' : 'Converting bedGraph file to BigWig',
-                    'actions' : ['bedGraphToBigWig %(dependencies)s %(genome_file)s %(targets)s'],
-                    'targets' : [with_extension(".bw")],
-                    'file_dep' : [with_extension(".bedgraph")],
-        })
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Converting plus strand bedGraph to BigWig',
+            'name'    : input_bamfile,
+            'actions' : ['bedGraphToBigWig %(dependencies)s %(genome_file)s %(targets)s'],
+            'targets' : [with_extension(input_bamfile, ".plus.bw")],
+            'file_dep' : [with_extension(input_bamfile, ".plus.bedgraph")],
+        }
 
-    return tasks_to_run
+def get_minus_bedgraph():
+    """Convert minus strand bamfiles to bedGraphs"""
 
-class MyTaskLoader(TaskLoader):
-    def __init__(self, tasks_to_run, args):
-        self.tasks_to_run = tasks_to_run
-        self.doit_db = os.path.join(self.get_db_dir(args),'.doit.db')
-        self.substitute_tasks(args)
-        super(TaskLoader, self).__init__()
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Making bedGraph for minus strand',
+            'name'     : input_bamfile,
+            'actions'  : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s.temp',
+                         'awk \'{print $1"\t"$2"\t"$3"\t-"$4}\' %(targets)s.temp > %(targets)s',
+                         'rm %(targets)s.temp'],
+            'targets'  : [with_extension(input_bamfile, ".minus.bedgraph")],
+            'file_dep' : [with_extension(input_bamfile, ".minus.bam")],
+        }
 
-    def get_db_dir(self, args):
+def get_minus_bigwig():
+    """Convert minus strand bedGraphs to BigWigs"""
 
-        return os.path.dirname(args.input_bamfile)
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Converting minus strand bedGraph to BigWig',
+            'name'     : input_bamfile,
+            'actions'  : ['bedGraphToBigWig %(dependencies)s %(genome_file)s %(targets)s'],
+            'targets'  : [with_extension(input_bamfile, ".minus.bw")],
+            'file_dep' : [with_extension(input_bamfile, ".minus.bedgraph")],
+        }
 
-    def substitute_tasks(self, args):
+def get_unstranded_bedgraph():
+    """Convert unstranded bamfiles to bedGraphs"""
 
-        subs_dictionary = vars(args)
-        subs_dictionary.update({'dependencies' : '%(dependencies)s',
-                                'targets' : '%(targets)s'})
-        print subs_dictionary
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Converting input bam file to bedGraph',
+            'name'     : input_bamfile,
+            'actions'  : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s'],
+            'targets'  : [with_extension(input_bamfile, ".bedgraph")],
+            'file_dep' : ['input_bamfile'],
+        }
 
-        for task in self.tasks_to_run:
-            task['actions'] = [ action % subs_dictionary for action in task['actions'] ]
+def get_unstranded_bigwig():
+    """Convert unstranded bamfiles to bedGraphs"""
 
-    #@staticmethod
-    def load_tasks(self, cmd, opt_values, pos_args):
-        task_list = [ dict_to_task(my_task) for my_task in self.tasks_to_run ]
-        config = {'verbosity': 2,
-                  'dep_file' : self.doit_db
-                 }
-        return task_list, config
+    for input_bamfile in args.input_bamfiles:
+        yield {
+            'basename' : 'Converting bedGraph file to BigWig',
+            'name'     : input_bamfile,
+            'actions'  : ['bedGraphToBigWig %(dependencies)s %(genome_file)s %(targets)s'],
+            'targets'  : [with_extension(input_bamfile, ".bw")],
+            'file_dep' : [with_extension(input_bamfile, ".bedgraph")],
+        }
 
 def main(args):
 
-    tasks_to_run = get_doit_tasks(args.input_bamfile)
+    tasks_to_run = { 'task_sort_bam' : sort_bam }
 
-    sys.exit(DoitMain(MyTaskLoader(tasks_to_run, args)).run([]))
+    stranded_tasks = { 'task_plus_bamfile'   : get_plus_bamfile,
+                       'task_minus_bamfile'  : get_minus_bamfile,
+                       'task_plus_bedgraph'  : get_plus_bedgraph,
+                       'task_minus_bedgraph' : get_minus_bedgraph,
+                       'task_plus_bigwig'    : get_plus_bigwig,
+                       'task_minus_bigwig'   : get_minus_bigwig }
+
+    unstranded_tasks = { 'task_bedgraph' : get_unstranded_bedgraph,
+                         'task_bigwig'   : get_unstranded_bigwig }
+
+    if args.stranded:
+        tasks_to_run.update(stranded_tasks)
+    else:
+        tasks_to_run.update(unstranded_tasks)
+    
+    sys.exit(DoitMain(ModuleTaskLoader(tasks_to_run)).run([]))
 
 if __name__ == "__main__":
 
