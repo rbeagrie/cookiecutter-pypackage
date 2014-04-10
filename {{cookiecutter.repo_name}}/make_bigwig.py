@@ -8,8 +8,8 @@ from doit.doit_cmd import DoitMain
 
 
 parser = argparse.ArgumentParser(description='Create BigWigs from RNA-seq data.')
-parser.add_argument('input_bamfiles', metavar='INPUT_BAMFILE', nargs='+', help='Input bam file to create BigWigs from.')
-parser.add_argument('-g','--genome_file', metavar='GENOME_FILE', help='File containing chromosome names and lengths')
+parser.add_argument('input_bamfiles', metavar='INPUT_BAMFILE', nargs='+', help='Input bam file(s) to create BigWigs from.')
+parser.add_argument('-g','--genome_file', metavar='GENOME_FILE', required=True, help='File containing chromosome names and lengths')
 parser.add_argument('-s','--stranded',action='store_true',
                     help='Create two BigWigs, one for the plus and one for the minus strand (default: one file for both strands)')
 
