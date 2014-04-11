@@ -115,7 +115,7 @@ def get_unstranded_bedgraph():
             'name'     : input_bamfile,
             'actions'  : ['genomeCoverageBed -bg -split -ibam %(dependencies)s -g %(genome_file)s > %(targets)s'],
             'targets'  : [with_extension(input_bamfile, ".bedgraph")],
-            'file_dep' : ['input_bamfile'],
+            'file_dep' : [with_extension(input_bamfile, ".sorted.bam")],
         }
 
 def get_unstranded_bigwig():
