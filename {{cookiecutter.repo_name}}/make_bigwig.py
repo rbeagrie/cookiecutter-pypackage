@@ -130,6 +130,16 @@ def get_unstranded_bigwig():
             'file_dep' : [with_extension(input_bamfile, ".bedgraph")],
         }
 
+class MyTaskLoader(ModuleTaskLoader):
+
+    def load_tasks(self, cmd, opt_values, pos_args):
+        task_list, doit_config = super(MyTaskLoader, self).load_tasks(cmd, opt_values, pos_args)
+
+        for task in task_list:
+            task.options = vars(args)
+
+        return task_list, doit_config
+
 def main(args):
 
     tasks_to_run = { 'task_sort_bam' : sort_bam }
@@ -149,7 +159,7 @@ def main(args):
     else:
         tasks_to_run.update(unstranded_tasks)
     
-    sys.exit(DoitMain(ModuleTaskLoader(tasks_to_run)).run([]))
+    sys.exit(DoitMain(MyTaskLoader(tasks_to_run)).run([]))
 
 if __name__ == "__main__":
 
